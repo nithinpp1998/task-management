@@ -69,6 +69,13 @@ class TaskController extends Controller
         return redirect()->route('tasks.index')->with('success', 'Task updated successfully.');
     }
 
+    public function updateStatus(UpdateTaskStatusRequest $request, Task $task)
+    {
+        $this->taskService->updateTaskStatus($task->id, $request->validated('status'));
+
+        return redirect()->back()->with('success', 'Task status updated successfully.');
+    }
+
     public function destroy(Task $task)
     {
         $this->authorize('delete', $task);

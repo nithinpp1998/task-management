@@ -1,5 +1,6 @@
 <x-app-layout>
     @section('right_sidebar_extra')
+        @can('update', $task)
         {{-- Regenerate AI Summary button --}}
         <form action="{{ route('tasks.update', $task) }}" method="POST">
             @csrf
@@ -18,6 +19,7 @@
                 </svg>
             </button>
         </form>
+        @endcan
     @endsection
 
     <div class="flex justify-between items-center mb-8">
@@ -128,14 +130,11 @@
 
         {{-- Mark as Completed --}}
         @can('updateStatus', $task)
-            <form action="{{ route('tasks.update', $task) }}" method="POST"
+            <form action="{{ route('tasks.update_status', $task) }}" method="POST"
                   class="mt-6 pt-6 border-t border-slate-100 flex justify-center">
                 @csrf
-                @method('PUT')
-                <input type="hidden" name="title"       value="{{ $task->title }}">
-                <input type="hidden" name="priority"    value="{{ $task->priority }}">
-                <input type="hidden" name="assigned_to" value="{{ $task->assigned_to }}">
-                <input type="hidden" name="status"      value="completed">
+                @method('PATCH')
+                <input type="hidden" name="status" value="completed">
                 <button type="submit"
                     class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-12 rounded-full shadow-lg shadow-blue-500/30 transition-transform transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                     {{ $task->status == 'completed' ? 'disabled' : '' }}>
