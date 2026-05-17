@@ -8,43 +8,137 @@ use Illuminate\Support\Facades\Log;
 
 class AIService
 {
-    public function generateSummaryAndPriority(Task $task)
+    private string $apiKey;
+    private string $model;
+    private string $baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+    public function __construct()
+    {
+        $this->apiKey = config('services.gemini.key');
+        $this->model  = config('services.gemini.model', 'gemini-1.5-flash');
+    }
+
+    /**
+     * Generate an AI summary and priority for a task using the Gemini API.
+     */
+    public function generateSummaryAndPriority(Task $task): array
     {
         try {
-            // Mocking AI response for the assignment
-            // In a real application, you would call OpenAI/Gemini API here
-            
-            // Example real API call (mocked):
-            /*
-            $response = Http::withToken(config('services.openai.key'))
-                ->post('https://api.openai.com/v1/chat/completions', [
-                    'model' => 'gpt-3.5-turbo',
-                    'messages' => [
-                        ['role' => 'system', 'content' => 'Analyze the task and provide a summary and priority (low, medium, high) in JSON format: {"ai_summary": "...", "ai_priority": "..."}'],
-                        ['role' => 'user', 'content' => "Title: {$task->title}\nDescription: {$task->description}"]
-                    ]
+            $prompt = $this->buildPrompt($task);
+
+            $response = Http::timeout(30)->post(
+                "{$this->baseUrl}/{$this->model}:generateContent?key={$this->apiKey}",
+                [
+                    'contents' => [
+                        [
+                            'parts' => [
+                                ['text' => $prompt],
+                            ],
+                        ],
+                    ],
+                    'generationConfig' => [
+                        'responseMimeType' => 'application/json',
+                        'temperature'      => 0.3,
+                        'maxOutputTokens'  => 300,
+                    ],
+                ]
+            );
+
+            if ($response->failed()) {
+                Log::warning('Gemini API returned non-success status.', [
+                    'task_id' => $task->id,
+                    'status'  => $response->status(),
+                    'body'    => $response->body(),
                 ]);
-            */
-            
-            // Simulating API delay
-            sleep(2);
-            
-            $priorities = ['low', 'medium', 'high'];
-            $randomPriority = $priorities[array_rand($priorities)];
+
+                return $this->fallbackResponse($task);
+            }
+
+            return $this->parseResponse($response->json(), $task);
+
+        } catch (\Exception $e) {
+            Log::error('AIService::generateSummaryAndPriority failed.', [
+                'task_id' => $task->id,
+                'error'   => $e->getMessage(),
+            ]);
+
+            return $this->fallbackResponse($task);
+        }
+    }
+
+    /**
+     * Build the Gemini prompt for the task.
+     */
+    private function buildPrompt(Task $task): string
+    {
+        $description = $task->description ?: 'No description provided.';
+
+        return <<<PROMPT
+You are a task management AI assistant. Analyze the following task and respond with a JSON object only — no markdown, no extra text.
+
+Task Title: {$task->title}
+Task Description: {$description}
+Current Priority: {$task->priority}
+Current Status: {$task->status}
+
+Respond with this exact JSON format:
+{
+  "ai_summary": "A concise 2-3 sentence summary of what the task involves and what needs to be done.",
+  "ai_priority": "low|medium|high"
+}
+
+Base the ai_priority on urgency, complexity, and impact. Be specific and helpful in the summary.
+PROMPT;
+    }
+
+    /**
+     * Parse the Gemini API response and extract summary/priority.
+     */
+    private function parseResponse(array $data, Task $task): array
+    {
+        try {
+            $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? null;
+
+            if (! $text) {
+                Log::warning('Gemini API returned empty text.', ['task_id' => $task->id, 'data' => $data]);
+                return $this->fallbackResponse($task);
+            }
+
+            // Strip any accidental markdown code fences
+            $text = preg_replace('/```json|```/i', '', $text);
+            $parsed = json_decode(trim($text), true);
+
+            if (! $parsed || empty($parsed['ai_summary']) || empty($parsed['ai_priority'])) {
+                Log::warning('Gemini API returned unparseable JSON.', ['task_id' => $task->id, 'text' => $text]);
+                return $this->fallbackResponse($task);
+            }
+
+            // Ensure priority is a valid enum value
+            $validPriorities = ['low', 'medium', 'high'];
+            $priority = strtolower(trim($parsed['ai_priority']));
+            if (! in_array($priority, $validPriorities)) {
+                $priority = 'medium';
+            }
 
             return [
-                'ai_summary' => "This is an AI generated summary for the task: {$task->title}. It focuses on managing backend operations and improving user experience.",
-                'ai_priority' => $randomPriority,
+                'ai_summary'  => trim($parsed['ai_summary']),
+                'ai_priority' => $priority,
             ];
-            
+
         } catch (\Exception $e) {
-            Log::error('AI Service Error: ' . $e->getMessage());
-            
-            // Fallback response
-            return [
-                'ai_summary' => 'Failed to generate AI summary.',
-                'ai_priority' => 'low',
-            ];
+            Log::error('AIService::parseResponse failed.', ['task_id' => $task->id, 'error' => $e->getMessage()]);
+            return $this->fallbackResponse($task);
         }
+    }
+
+    /**
+     * Fallback response when the API call fails.
+     */
+    private function fallbackResponse(Task $task): array
+    {
+        return [
+            'ai_summary'  => "Summary generation is currently unavailable for \"{$task->title}\". Please try again later.",
+            'ai_priority' => $task->priority ?? 'medium',
+        ];
     }
 }

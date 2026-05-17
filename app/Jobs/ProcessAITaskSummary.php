@@ -16,9 +16,21 @@ class ProcessAITaskSummary implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries = 3; // Retry handling
-    public $backoff = 10; // 10 seconds backoff
-    
+    /**
+     * Number of times the job may be attempted.
+     */
+    public int $tries = 3;
+
+    /**
+     * Number of seconds to wait before retrying.
+     */
+    public int $backoff = 15;
+
+    /**
+     * Number of seconds the job can run before timing out.
+     */
+    public int $timeout = 60;
+
     /**
      * Create a new job instance.
      */
@@ -31,17 +43,50 @@ class ProcessAITaskSummary implements ShouldQueue
      */
     public function handle(AIService $aiService): void
     {
+        // Mark summary as generating so the UI can show a loading state
+        $this->task->update(['ai_summary' => null, 'ai_priority' => null]);
+
         try {
-            $result = $aiService->generateSummaryAndPriority($this->task);
-            
-            $this->task->update([
-                'ai_summary' => $result['ai_summary'],
+            // Re-fetch fresh task data in case it was updated between dispatch and execution
+            $freshTask = Task::find($this->task->id);
+
+            if (! $freshTask) {
+                Log::warning("ProcessAITaskSummary: Task {$this->task->id} no longer exists. Skipping.");
+                return;
+            }
+
+            $result = $aiService->generateSummaryAndPriority($freshTask);
+
+            $freshTask->update([
+                'ai_summary'  => $result['ai_summary'],
                 'ai_priority' => $result['ai_priority'],
             ]);
-            
+
+            Log::info("ProcessAITaskSummary: Successfully generated AI summary for task {$freshTask->id}.");
+
         } catch (Exception $e) {
-            Log::error("Failed to process AI summary for task {$this->task->id}: {$e->getMessage()}");
-            throw $e;
+            Log::error("ProcessAITaskSummary: Failed for task {$this->task->id}.", [
+                'error'   => $e->getMessage(),
+                'attempt' => $this->attempts(),
+            ]);
+
+            throw $e; // Let Laravel's retry mechanism handle it
         }
+    }
+
+    /**
+     * Handle a job that has failed.
+     */
+    public function failed(Exception $exception): void
+    {
+        Log::error("ProcessAITaskSummary: Job permanently failed for task {$this->task->id}.", [
+            'error' => $exception->getMessage(),
+        ]);
+
+        // Write a graceful fallback summary so the UI never shows null
+        Task::where('id', $this->task->id)->update([
+            'ai_summary'  => 'AI summary generation failed after multiple attempts. Please try editing and saving the task to retry.',
+            'ai_priority' => $this->task->priority ?? 'medium',
+        ]);
     }
 }

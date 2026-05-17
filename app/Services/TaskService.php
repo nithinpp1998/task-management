@@ -23,13 +23,16 @@ class TaskService
         return $this->taskRepository->find($id);
     }
 
+    /**
+     * Create a task and dispatch AI summary generation job.
+     */
     public function createTask(array $data)
     {
         DB::beginTransaction();
         try {
             $task = $this->taskRepository->create($data);
-            
-            // Dispatch AI summary job
+
+            // Dispatch AI summary job for new task
             ProcessAITaskSummary::dispatch($task);
 
             DB::commit();
@@ -40,11 +43,23 @@ class TaskService
         }
     }
 
+    /**
+     * Update a task. If the description changed, re-dispatch AI summary job.
+     */
     public function updateTask(int $id, array $data)
     {
         DB::beginTransaction();
         try {
+            $existingTask = $this->taskRepository->find($id);
+            $descriptionChanged = ($existingTask->description !== ($data['description'] ?? $existingTask->description));
+
             $task = $this->taskRepository->update($id, $data);
+
+            // Re-generate AI summary only when description actually changed
+            if ($descriptionChanged) {
+                ProcessAITaskSummary::dispatch($task);
+            }
+
             DB::commit();
             return $task;
         } catch (Exception $e) {
@@ -57,7 +72,7 @@ class TaskService
     {
         return $this->taskRepository->updateStatus($id, $status);
     }
-    
+
     public function deleteTask(int $id)
     {
         return $this->taskRepository->delete($id);
