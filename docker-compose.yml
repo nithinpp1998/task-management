@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # PHP Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: task-manager-app
+    container_name: task-manager-app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+    networks:
+      - task-manager-network
+    depends_on:
+      - mysql
+      - redis
+
+  # Nginx Web Server
+  nginx:
+    image: nginx:alpine
+    container_name: task-manager-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+    networks:
+      - task-manager-network
+    depends_on:
+      - app
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: task-manager-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: task_manager
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_PASSWORD: secret
+      MYSQL_USER: taskuser
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    networks:
+      - task-manager-network
+
+  # Redis Cache & Queue
+  redis:
+    image: redis:alpine
+    container_name: task-manager-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    networks:
+      - task-manager-network
+
+  # Queue Worker
+  queue-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: task-manager-queue
+    restart: unless-stopped
+    working_dir: /var/www
+    command: php artisan queue:work --sleep=3 --tries=3
+    volumes:
+      - ./:/var/www
+    networks:
+      - task-manager-network
+    depends_on:
+      - mysql
+      - redis
+
+networks:
+  task-manager-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+    driver: local
