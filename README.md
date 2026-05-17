@@ -1,83 +1,139 @@
 # AI-Assisted Task Management System
 
-This is a complete production-ready Laravel 10+ AI Assisted Task Management System built with Laravel Blade, Tailwind CSS, MySQL, Repository Pattern, Service Layer Architecture, Policies, REST APIs, Docker, and AI Integration.
+## About Project
 
-## Architecture & Patterns Used
+This is a premium, production-ready AI-Assisted Task Management System. Built using **Laravel 10+**, **Tailwind CSS**, and **MySQL**, it implements clean layered architecture patterns including:
+- **Service Layer & Repository Pattern** for decoupled and maintainable business logic.
+- **Queue Workers** for asynchronous, retry-enabled AI summarization and priority classification.
+- **Fine-grained RBAC Policy System** protecting resources dynamically for Admin and User roles.
+- **Sanctum-Protected REST APIs** for cross-platform integration.
+- **Glassmorphic and Responsive UI** including dual-scrollable list views, custom interactive canvas backgrounds, and live Chart.js statistics.
 
-### Clean Architecture
-The application strictly follows a clean layered architecture to ensure modularity, scalability, and maintainability.
-- **Controllers**: Responsible only for handling HTTP requests, authorization, and delegating business logic to Services. Direct Eloquent calls are completely avoided here.
-- **Service Layer**: Houses the core business logic, transaction handling, and coordinates between Repositories and external services (like the AI integration).
-- **Repository Pattern**: Abstracts data access. The `TaskRepository` implements `TaskRepositoryInterface`, allowing flexible database querying, filtering, and pagination while keeping the Service layer decoupled from Eloquent.
+---
 
-### Design Patterns & Principles
-- **Dependency Injection**: Used heavily across Controllers, Services, and Jobs to decouple classes and enhance testability.
-- **SOLID Principles**: Adhered to (e.g., Single Responsibility Principle in Services/Jobs, Open/Closed through Interfaces).
-- **Enums**: Strongly typed Enums (`TaskPriority`, `TaskStatus`, `AIPriority`) are used to manage finite states.
-- **Policies**: Fine-grained authorization implemented via `TaskPolicy`.
-- **Form Requests**: All validation logic is extracted to dedicated Form Request classes.
-- **API Resources**: Transforms models into standardized JSON responses (`TaskResource`).
+## Setup Instructions
 
-### AI Integration Flow
-1. When a new Task is created, the `TaskService` delegates to the `TaskRepository`.
-2. After successful persistence, a `ProcessAITaskSummary` Queue Job is dispatched to run asynchronously.
-3. The Job uses the `AIService` to communicate with the AI model (mocked here but ready for OpenAI/Gemini SDK).
-4. The generated summary and AI priority are then patched back to the task, with built-in retry logic and exception logging.
+### Requirements
+- **Local Environment:** PHP >= 8.2, Composer, Node.js >= 18, NPM, MySQL >= 8.0, Redis.
+- **Docker Environment (Recommended):** Docker Desktop (includes Docker Compose).
 
-## Installation Guide (Docker/Sail)
+---
 
-This project is pre-configured with Laravel Sail (Docker), providing PHP 8.2+, MySQL, Redis, and Nginx.
+### Installation & Environment Setup
 
-1. Clone the repository and navigate to the project root:
+#### Option 1: Using Docker (Recommended via Laravel Sail)
+1. **Clone the Repository & Navigate to the Project Root:**
    ```bash
    cd task-manager2.0
    ```
-2. Copy the environment file and install dependencies:
+2. **Setup Environment File:**
    ```bash
    cp .env.example .env
+   ```
+3. **Install Composer Dependencies:**
+   ```bash
    composer install
+   ```
+4. **Install NPM Dependencies:**
+   ```bash
    npm install
    ```
-3. Start the Docker containers using Sail:
+5. **Start Docker Containers:**
    ```bash
    ./vendor/bin/sail up -d
    ```
-4. Generate the application key and run database migrations/seeders:
+6. **Generate Application Key:**
    ```bash
    ./vendor/bin/sail artisan key:generate
+   ```
+7. **Run Database Setup & Migrations (with seeders):**
+   ```bash
    ./vendor/bin/sail artisan migrate:fresh --seed
    ```
-5. Compile frontend assets:
+8. **Compile Frontend Assets:**
    ```bash
    ./vendor/bin/sail npm run build
    ```
 
-## Running the Queue (For AI Features)
+#### Option 2: Running Locally (Without Docker)
+1. **Setup Environment File:**
+   ```bash
+   cp .env.example .env
+   ```
+2. **Install Dependencies:**
+   ```bash
+   composer install
+   ```
+3. **Generate Application Key:**
+   ```bash
+   php artisan key:generate
+   ```
+4. **Database Configuration:**
+   Configure your database credentials inside the `.env` file:
+   ```env
+   DB_CONNECTION=mysql
+   DB_HOST=127.0.0.1
+   DB_PORT=3306
+   DB_DATABASE=task_manager
+   DB_USERNAME=root
+   DB_PASSWORD=your_password
+   ```
+5. **Run Migrations & Seeders:**
+   ```bash
+   php artisan migrate:fresh --seed
+   ```
+6. **Install Frontend Assets & Compile:**
+   ```bash
+   npm install
+   npm run build
+   ```
 
-The AI summary generation happens asynchronously using a Queue Worker. To start it, run:
+---
+
+### Running the Application
+
+1. **Start the Development Server:**
+   ```bash
+   # Docker
+   ./vendor/bin/sail up -d
+   # Local
+   php artisan serve
+   ```
+2. **Start the Queue Worker (Mandatory for AI Summary Processing):**
+   ```bash
+   # Docker
+   ./vendor/bin/sail artisan queue:work
+   # Local
+   php artisan queue:work
+   ```
+3. **Access the Application:**
+   Navigate to [http://127.0.0.1:8000](http://127.0.0.1:8000)
+   - **Admin User:** `admin@example.com` / `password`
+   - **Regular User:** `user@example.com` / `password`
+
+---
+
+### Running Tests
+To verify all unit, feature, and authorization flows:
 ```bash
-./vendor/bin/sail artisan queue:work
-```
-
-## Testing
-
-The application includes robust Unit and Feature tests.
-To run the test suite:
-```bash
+# Docker
 ./vendor/bin/sail artisan test
+# Local
+php artisan test
 ```
 
-## Role System
+---
 
-The database seeder automatically generates two default accounts:
-1. **Admin** (`admin@example.com` / `password`): Full access to create, update, delete, and view all tasks. Access to user management.
-2. **User** (`user@example.com` / `password`): Can only view their assigned tasks and update the task status.
+### Common Fixes
 
-## REST APIs
+#### 1. Database Connection Refused
+Ensure MySQL service is running. If running locally, check port `3306` inside `.env`. If running Docker, make sure you stop any conflicting local MySQL instance.
 
-The application exposes fully authenticated REST APIs (using Sanctum). Note: A Bearer token is required.
+#### 2. Queue Jobs not processing
+Make sure `php artisan queue:work` is actively running in the background, as AI summaries are queued asynchronously.
 
-- `GET /api/tasks` - List all tasks (with filters & pagination)
-- `POST /api/tasks` - Create a new task (Admin only)
-- `PATCH /api/tasks/{id}/status` - Update task status
-- `GET /api/tasks/{id}/ai-summary` - Retrieve AI-generated summary
+#### 3. Asset Styles not displaying
+Compile the assets to ensure Tailwind utility styling is fully built:
+```bash
+npm run build
+```
