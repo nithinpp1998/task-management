@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\StoreTaskRequest;
-use App\Http\Requests\UpdateTaskStatusRequest;
+use App\Http\Requests\Task\StoreTaskRequest;
+use App\Http\Requests\Task\UpdateTaskStatusRequest;
 use App\Http\Resources\TaskResource;
 use App\Models\Task;
 use App\Services\TaskService;
-use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\Request;
 
 class TaskApiController extends Controller
 {
@@ -22,8 +22,8 @@ class TaskApiController extends Controller
     public function index(Request $request)
     {
         $filters = $request->only(['search', 'status', 'priority']);
-        
-        if (!$request->user()->isAdmin()) {
+
+        if (! $request->user()->isAdmin()) {
             $filters['user_id'] = $request->user()->id;
         }
 
@@ -35,24 +35,26 @@ class TaskApiController extends Controller
     public function store(StoreTaskRequest $request)
     {
         $task = $this->taskService->createTask($request->validated());
+
         return new TaskResource($task);
     }
 
     public function updateStatus(UpdateTaskStatusRequest $request, Task $task)
     {
         $updatedTask = $this->taskService->updateTaskStatus($task->id, $request->status);
+
         return new TaskResource($updatedTask);
     }
 
     public function aiSummary(Task $task)
     {
         $this->authorize('view', $task);
-        
+
         return response()->json([
             'data' => [
-                'ai_summary' => $task->ai_summary,
+                'ai_summary'  => $task->ai_summary,
                 'ai_priority' => $task->ai_priority,
-            ]
+            ],
         ]);
     }
 }
