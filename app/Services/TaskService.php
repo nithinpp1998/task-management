@@ -77,4 +77,9 @@ class TaskService
     {
         return $this->taskRepository->delete($id);
     }
+
+    public function getTaskStats(?int $userId = null): array
+    {
+        return $this->taskRepository->getStats($userId);
+    }
 }

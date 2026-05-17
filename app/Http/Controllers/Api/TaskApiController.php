@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Task\StoreTaskRequest;
 use App\Http\Requests\Task\UpdateTaskStatusRequest;
 use App\Http\Resources\TaskResource;
-use App\Models\Task;
 use App\Services\TaskService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
@@ -39,15 +38,19 @@ class TaskApiController extends Controller
         return new TaskResource($task);
     }
 
-    public function updateStatus(UpdateTaskStatusRequest $request, Task $task)
+    public function updateStatus(UpdateTaskStatusRequest $request, $id)
     {
-        $updatedTask = $this->taskService->updateTaskStatus($task->id, $request->status);
+        $task = $this->taskService->getTask($id);
+        $this->authorize('updateStatus', $task);
+
+        $updatedTask = $this->taskService->updateTaskStatus($id, $request->status);
 
         return new TaskResource($updatedTask);
     }
 
-    public function aiSummary(Task $task)
+    public function aiSummary($id)
     {
+        $task = $this->taskService->getTask($id);
         $this->authorize('view', $task);
 
         return response()->json([
