@@ -2,12 +2,24 @@
 
 ## About Project
 
-This is a premium, production-ready AI-Assisted Task Management System. Built using **Laravel 10+**, **Tailwind CSS**, and **MySQL**, it implements clean layered architecture patterns including:
-- **Service Layer & Repository Pattern** for decoupled and maintainable business logic.
-- **Queue Workers** for asynchronous, retry-enabled AI summarization and priority classification.
-- **Fine-grained RBAC Policy System** protecting resources dynamically for Admin and User roles.
-- **Sanctum-Protected REST APIs** for cross-platform integration.
-- **Glassmorphic and Responsive UI** including dual-scrollable list views, custom interactive canvas backgrounds, and live Chart.js statistics.
+This is a premium, production-ready AI-Assisted Task Management System. Built using **Laravel 10+**, **Tailwind CSS**, and **MySQL**, it demonstrates advanced web application concepts, clean architecture, and modern AI integration.
+
+### Core Architecture
+
+This project is built utilizing robust software design patterns to ensure maintainability, testability, and decoupled logic:
+- **Service Layer & Repository Pattern:** Business logic is abstracted into dedicated Services (e.g., `TaskService`, `AIService`), while data access is handled by Repositories (`TaskRepositoryInterface`, `Eloquent/TaskRepository`). Controllers only handle HTTP request validation and response formatting.
+- **Form Request Validation Architecture:** Extensive use of strict, modular Form Requests (e.g., `UpdateProfileRequest`, `StoreTaskRequest`) completely separating validation rules from Controller logic.
+- **Repository Caching:** Implements intelligent caching with tags and graceful degradation. `TaskRepository` caches list (`all()`) and single fetch (`find()`) queries. Write operations (`create`, `update`, `delete`, `updateStatus`) automatically invalidate the cache using localized tags to ensure fresh data delivery without performance penalties.
+- **Fine-grained RBAC Policy System:** Resources are protected dynamically using Laravel Policies (`TaskPolicy`). Admins retain full CRUD privileges, while Users are restricted to updating statuses on assigned tasks only.
+- **Sanctum-Protected REST APIs:** Cross-platform integration ready via `/api/tasks`.
+
+### AI Integration (Gemini)
+
+The system leverages the **Gemini API** for automated intelligent task insights:
+- **Asynchronous Queue Workers:** The `ProcessAITaskSummary` job is dispatched onto a database queue when a task is created or its description significantly changes. 
+- **Graceful Retries & Fallbacks:** The job utilizes timeouts, 3 backoff retries, and dedicated `failed()` hooks to insert a safe fallback string if the AI is unreachable, preventing UI breakage.
+- **Smart UI Polling:** The task detail page dynamically detects if the `ai_summary` is null. It displays an animated loader and automatically polls for the generated content once the queue worker finishes.
+- **Insight Extraction:** The `AIService` constructs a detailed prompt from the task title and description, instructing the Gemini model (`gemini-1.5-flash`) to return a strict JSON payload containing a concise summary and an AI-recommended priority level.
 
 ---
 
